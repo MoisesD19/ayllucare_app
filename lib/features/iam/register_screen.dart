@@ -1,6 +1,8 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
-import 'package:intl/intl.dart';
+import 'package:http/http.dart' as http;
 import 'package:ayllucare_app/theme/colors.dart';
+import 'package:ayllucare_app/core/app_constants.dart';
 import 'login_screen.dart';
 
 class RegisterScreen extends StatefulWidget {
@@ -12,62 +14,79 @@ class RegisterScreen extends StatefulWidget {
 
 class _RegisterScreenState extends State<RegisterScreen> {
   final _formKey = GlobalKey<FormState>();
+
   final TextEditingController _nameController = TextEditingController();
-  final TextEditingController _dniController = TextEditingController();
-  final TextEditingController _birthDateController = TextEditingController();
-  final TextEditingController _ageController = TextEditingController();
+  final TextEditingController _lastnameController = TextEditingController();
   final TextEditingController _emailController = TextEditingController();
   final TextEditingController _passwordController = TextEditingController();
-  final TextEditingController _confirmPasswordController = TextEditingController();
+  final TextEditingController _phoneController = TextEditingController();
 
+  String _selectedLanguage = "Español";
   bool _isPasswordVisible = false;
-  bool _isConfirmPasswordVisible = false;
-  DateTime? _selectedDate;
+  bool _isLoading = false;
 
-  Future<void> _selectBirthDate(BuildContext context) async {
-    final DateTime hoy = DateTime.now();
-    final DateTime fechaMaxima = DateTime(hoy.year - 18, hoy.month, hoy.day); // mínimo 18 años
+  Future<void> _registrarUsuario() async {
+    if (!_formKey.currentState!.validate()) return;
 
-    final DateTime? picked = await showDatePicker(
-      context: context,
-      initialDate: fechaMaxima,
-      firstDate: DateTime(1900),
-      lastDate: fechaMaxima,
-      helpText: 'Selecciona tu fecha de nacimiento',
-      locale: const Locale('es', 'ES'),
-    );
+    setState(() => _isLoading = true);
 
-    if (picked != null) {
-      setState(() {
-        _selectedDate = picked;
-        _birthDateController.text = DateFormat('dd/MM/yyyy').format(picked);
-        _ageController.text = _calculateAge(picked).toString();
-      });
-    }
-  }
+    try {
+      final url =
+          Uri.parse("${AppConstants.baseUrl}/authentication/sign-up");
 
-  int _calculateAge(DateTime birthDate) {
-    DateTime today = DateTime.now();
-    int age = today.year - birthDate.year;
-    if (today.month < birthDate.month ||
-        (today.month == birthDate.month && today.day < birthDate.day)) {
-      age--;
-    }
-    return age;
-  }
+      final body = {
+        "firstName": _nameController.text.trim(),
+        "lastName": _lastnameController.text.trim(),
+        "email": _emailController.text.trim(),
+        "password": _passwordController.text.trim(),
+        "roles": ["ROLE_PATIENT"],
+        "phoneNumber": _phoneController.text.trim().isEmpty
+            ? null
+            : _phoneController.text.trim(),
+        "preferredLanguage": _selectedLanguage == "Español" ? "es" : "qu"
+      };
 
-  void _registrarUsuario() {
-    if (_formKey.currentState!.validate()) {
+      final response = await http.post(
+        url,
+        headers: {"Content-Type": "application/json"},
+        body: jsonEncode(body),
+      );
+
+      if (response.statusCode == 200 || response.statusCode == 201) {
+        // Registro exitoso
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text("Cuenta creada correctamente")),
+        );
+
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (_) => const LoginScreen()),
+        );
+      } else {
+        // Error
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text("Error: ${response.body}"),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    } catch (e) {
+      // Error inesperado
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Cuenta creada correctamente')),
+        SnackBar(
+          content: Text("Hubo un error al registrarse: $e"),
+          backgroundColor: Colors.red,
+        ),
       );
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(builder: (_) => const LoginScreen()),
-      );
+    } finally {
+      setState(() => _isLoading = false);
     }
   }
 
+  // -----------------------------------------------------------
+  // UI
+  // -----------------------------------------------------------
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -82,7 +101,8 @@ class _RegisterScreenState extends State<RegisterScreen> {
               Center(
                 child: Column(
                   children: const [
-                    Icon(Icons.health_and_safety, size: 60, color: AppColors.lightBlue),
+                    Icon(Icons.health_and_safety,
+                        size: 60, color: AppColors.lightBlue),
                     SizedBox(height: 10),
                     Text(
                       'Crear cuenta',
@@ -103,74 +123,37 @@ class _RegisterScreenState extends State<RegisterScreen> {
               ),
               const SizedBox(height: 40),
 
-              //nombre completo
+              // Nombre
               TextFormField(
                 controller: _nameController,
-                decoration: _inputDecoration('Nombre completo', Icons.person),
+                decoration: _inputDecoration('Nombre', Icons.person),
                 validator: (value) =>
-                    value == null || value.isEmpty ? 'Por favor ingresa tu nombre' : null,
+                    value == null || value.isEmpty ? 'Ingresa tu nombre' : null,
               ),
               const SizedBox(height: 20),
 
-              //DNI
+              // Apellido
               TextFormField(
-                controller: _dniController,
-                keyboardType: TextInputType.number,
-                decoration: _inputDecoration('DNI', Icons.badge),
-                maxLength: 8,
-                validator: (value) {
-                  if (value == null || value.isEmpty) {
-                    return 'Por favor ingresa tu DNI';
-                  } else if (value.length != 8) {
-                    return 'El DNI debe tener 8 dígitos';
-                  } else if (!RegExp(r'^[0-9]+$').hasMatch(value)) {
-                    return 'El DNI solo puede contener números';
-                  }
-                  return null;
-                },
-              ),
-              const SizedBox(height: 10),
-
-              //fecha de nacimiento
-              TextFormField(
-                controller: _birthDateController,
-                readOnly: true,
-                decoration: _inputDecoration('Fecha de nacimiento', Icons.calendar_today)
-                    .copyWith(
-                  suffixIcon: IconButton(
-                    icon: const Icon(Icons.date_range, color: AppColors.lightBlue),
-                    onPressed: () => _selectBirthDate(context),
-                  ),
-                ),
-                validator: (value) {
-                  if (value == null || value.isEmpty) {
-                    return 'Selecciona tu fecha de nacimiento';
-                  }
-                  if (_selectedDate != null && _calculateAge(_selectedDate!) < 18) {
-                    return 'Debes tener al menos 18 años';
-                  }
-                  return null;
-                },
+                controller: _lastnameController,
+                decoration:
+                    _inputDecoration('Apellido', Icons.person_outline),
+                validator: (value) => value == null || value.isEmpty
+                    ? 'Ingresa tu apellido'
+                    : null,
               ),
               const SizedBox(height: 20),
 
-              //edad calculada automáticamente
-              TextFormField(
-                controller: _ageController,
-                readOnly: true,
-                decoration: _inputDecoration('Edad', Icons.cake),
-              ),
-              const SizedBox(height: 20),
-
-              //correo
+              // Email
               TextFormField(
                 controller: _emailController,
                 keyboardType: TextInputType.emailAddress,
-                decoration: _inputDecoration('Correo electrónico', Icons.email),
+                decoration:
+                    _inputDecoration('Correo electrónico', Icons.email),
                 validator: (value) {
                   if (value == null || value.isEmpty) {
-                    return 'Por favor ingresa tu correo';
-                  } else if (!RegExp(r'^[^@]+@[^@]+\.[^@]+').hasMatch(value)) {
+                    return 'Ingresa tu correo';
+                  } else if (!RegExp(r'^[^@]+@[^@]+\.[^@]+')
+                      .hasMatch(value)) {
                     return 'Correo no válido';
                   }
                   return null;
@@ -178,23 +161,26 @@ class _RegisterScreenState extends State<RegisterScreen> {
               ),
               const SizedBox(height: 20),
 
-              //contra
+              // Contraseña
               TextFormField(
                 controller: _passwordController,
                 obscureText: !_isPasswordVisible,
-                decoration: _inputDecoration('Contraseña', Icons.lock).copyWith(
-                  suffixIcon: IconButton(
-                    icon: Icon(
-                      _isPasswordVisible ? Icons.visibility_off : Icons.visibility,
-                      color: Colors.grey,
+                decoration: _inputDecoration('Contraseña', Icons.lock)
+                    .copyWith(
+                      suffixIcon: IconButton(
+                        icon: Icon(
+                          _isPasswordVisible
+                              ? Icons.visibility_off
+                              : Icons.visibility,
+                          color: Colors.grey,
+                        ),
+                        onPressed: () => setState(
+                            () => _isPasswordVisible = !_isPasswordVisible),
+                      ),
                     ),
-                    onPressed: () =>
-                        setState(() => _isPasswordVisible = !_isPasswordVisible),
-                  ),
-                ),
                 validator: (value) {
                   if (value == null || value.isEmpty) {
-                    return 'Por favor ingresa una contraseña';
+                    return 'Ingresa una contraseña';
                   } else if (value.length < 6) {
                     return 'Debe tener al menos 6 caracteres';
                   }
@@ -203,51 +189,54 @@ class _RegisterScreenState extends State<RegisterScreen> {
               ),
               const SizedBox(height: 20),
 
-              //confirmar contraseña
+              // Teléfono
               TextFormField(
-                controller: _confirmPasswordController,
-                obscureText: !_isConfirmPasswordVisible,
-                decoration: _inputDecoration('Confirmar contraseña', Icons.lock_outline)
-                    .copyWith(
-                  suffixIcon: IconButton(
-                    icon: Icon(
-                      _isConfirmPasswordVisible
-                          ? Icons.visibility_off
-                          : Icons.visibility,
-                      color: Colors.grey,
-                    ),
-                    onPressed: () => setState(
-                        () => _isConfirmPasswordVisible = !_isConfirmPasswordVisible),
-                  ),
-                ),
-                validator: (value) {
-                  if (value == null || value.isEmpty) {
-                    return 'Por favor confirma tu contraseña';
-                  } else if (value != _passwordController.text) {
-                    return 'Las contraseñas no coinciden';
-                  }
-                  return null;
-                },
+                controller: _phoneController,
+                keyboardType: TextInputType.phone,
+                decoration: _inputDecoration(
+                    'Número de teléfono (opcional)', Icons.phone),
+              ),
+              const SizedBox(height: 20),
+
+              // Idioma
+              DropdownButtonFormField<String>(
+                value: _selectedLanguage,
+                items: const [
+                  DropdownMenuItem(value: "Español", child: Text("Español")),
+                  DropdownMenuItem(value: "Quechua", child: Text("Quechua")),
+                ],
+                onChanged: (value) =>
+                    setState(() => _selectedLanguage = value!),
+                decoration:
+                    _inputDecoration('Idioma preferido', Icons.language),
               ),
               const SizedBox(height: 30),
 
+              // Botón registrar
               SizedBox(
                 width: double.infinity,
                 child: ElevatedButton(
                   style: ElevatedButton.styleFrom(
                     backgroundColor: AppColors.lightBlue,
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12)),
                     padding: const EdgeInsets.symmetric(vertical: 14),
                   ),
-                  onPressed: _registrarUsuario,
-                  child: const Text(
-                    'Registrarme',
-                    style: TextStyle(fontSize: 18, color: Colors.white),
-                  ),
+                  onPressed: _isLoading ? null : _registrarUsuario,
+                  child: _isLoading
+                      ? const CircularProgressIndicator(
+                          valueColor:
+                              AlwaysStoppedAnimation<Color>(Colors.white))
+                      : const Text(
+                          'Registrarme',
+                          style:
+                              TextStyle(fontSize: 18, color: Colors.white),
+                        ),
                 ),
               ),
               const SizedBox(height: 20),
 
+              // Link Login
               Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
@@ -257,7 +246,8 @@ class _RegisterScreenState extends State<RegisterScreen> {
                     onTap: () {
                       Navigator.pushReplacement(
                         context,
-                        MaterialPageRoute(builder: (_) => const LoginScreen()),
+                        MaterialPageRoute(
+                            builder: (_) => const LoginScreen()),
                       );
                     },
                     child: const Text(

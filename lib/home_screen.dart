@@ -1,5 +1,9 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:ayllucare_app/theme/colors.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:http/http.dart' as http;
+import 'package:ayllucare_app/core/app_constants.dart';
 import 'features/appointment/appointments_screen.dart';
 import 'features/prescription/prescription_history_screen.dart';
 import 'features/profile/profile_screen.dart';
@@ -15,27 +19,23 @@ class HomeScreen extends StatefulWidget {
 class _HomeScreenState extends State<HomeScreen> {
   int _currentIndex = 0;
 
-  final List<Widget> _screens = [
-    const _HomeContent(),
-    const AppointmentsScreen(),
-    const PrescriptionHistoryScreen(),
-    const ProfileScreen(),
-  ];
-
   @override
   Widget build(BuildContext context) {
+    final List<Widget> screens = [
+      const _HomeContent(),
+      const AppointmentsScreen(),
+      const PrescriptionHistoryScreen(),
+      const ProfileScreen(),
+    ];
+
     return Scaffold(
       backgroundColor: AppColors.background,
-      body: _screens[_currentIndex],
+      body: screens[_currentIndex],
       bottomNavigationBar: BottomNavigationBar(
         currentIndex: _currentIndex,
         selectedItemColor: AppColors.lightBlue,
         unselectedItemColor: AppColors.textBlue,
-        onTap: (index) {
-          setState(() {
-            _currentIndex = index;
-          });
-        },
+        onTap: (index) => setState(() => _currentIndex = index),
         items: const [
           BottomNavigationBarItem(icon: Icon(Icons.home), label: 'Inicio'),
           BottomNavigationBarItem(icon: Icon(Icons.calendar_today), label: 'Citas'),
@@ -47,8 +47,40 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 }
 
-class _HomeContent extends StatelessWidget {
+class _HomeContent extends StatefulWidget {
   const _HomeContent();
+
+  @override
+  State<_HomeContent> createState() => _HomeContentState();
+}
+
+class _HomeContentState extends State<_HomeContent> {
+  String userName = "Usuario";
+
+  @override
+  void initState() {
+    super.initState();
+    loadUserData();
+  }
+
+  Future<void> loadUserData() async {
+    final prefs = await SharedPreferences.getInstance();
+    final token = prefs.getString("token");
+    final userId = prefs.getInt("userId");
+    if (token == null || userId == null) return;
+
+    final response = await http.get(
+      Uri.parse("${AppConstants.baseUrl}/users/$userId"),
+      headers: {"Authorization": "Bearer $token"},
+    );
+
+    if (response.statusCode == 200) {
+      final data = jsonDecode(response.body);
+      setState(() {
+        userName = "${data["firstName"]} ${data["lastName"]}";
+      });
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -59,16 +91,19 @@ class _HomeContent extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Text('Bienvenido/a de vuelta,',
-                  style: TextStyle(fontSize: 18, color: AppColors.textBlue)),
-              const Text('Camila Verde',
-                  style: TextStyle(
-                      fontSize: 22,
-                      fontWeight: FontWeight.bold,
-                      color: AppColors.darkBlue)),
+              Text('Bienvenido/a de vuelta,',
+                  style: const TextStyle(fontSize: 18, color: AppColors.textBlue)),
+              Text(
+                userName,
+                style: const TextStyle(
+                  fontSize: 22,
+                  fontWeight: FontWeight.bold,
+                  color: AppColors.darkBlue,
+                ),
+              ),
+
               const SizedBox(height: 20),
 
-              //chatbot
               ElevatedButton.icon(
                 onPressed: () {
                   Navigator.push(
@@ -79,9 +114,6 @@ class _HomeContent extends StatelessWidget {
                 style: ElevatedButton.styleFrom(
                   backgroundColor: AppColors.lightBlue,
                   minimumSize: const Size(double.infinity, 50),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(10),
-                  ),
                 ),
                 icon: const Icon(Icons.medical_services),
                 label: const Text('Solicitar asistencia médica (Ayllu AI)'),
@@ -89,7 +121,6 @@ class _HomeContent extends StatelessWidget {
 
               const SizedBox(height: 20),
 
-              //proxima cita
               Card(
                 shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(12)),
@@ -100,36 +131,29 @@ class _HomeContent extends StatelessWidget {
                   onTap: () {
                     final homeState =
                         context.findAncestorStateOfType<_HomeScreenState>();
-                    if (homeState != null) {
-                      homeState.setState(() {
-                        homeState._currentIndex = 1;
-                      });
-                    }
+                    homeState?.setState(() => homeState._currentIndex = 1);
                   },
                 ),
               ),
 
               const SizedBox(height: 20),
 
-              //metricas de salud
               const Text('Métricas de salud (Último registro)',
                   style: TextStyle(fontWeight: FontWeight.bold)),
               const SizedBox(height: 10),
+
               Row(
                 children: [
                   Expanded(
                     child: Card(
-                      shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12)),
                       child: Padding(
-                        padding: const EdgeInsets.all(16),
+                        padding: EdgeInsets.all(16),
                         child: Column(
                           children: const [
                             Text('Presión arterial'),
                             Text('120/80',
                                 style: TextStyle(
-                                    fontSize: 22,
-                                    fontWeight: FontWeight.bold)),
+                                    fontSize: 22, fontWeight: FontWeight.bold)),
                             Text('mmHg (normal)'),
                           ],
                         ),
@@ -138,17 +162,14 @@ class _HomeContent extends StatelessWidget {
                   ),
                   Expanded(
                     child: Card(
-                      shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12)),
                       child: Padding(
-                        padding: const EdgeInsets.all(16),
+                        padding: EdgeInsets.all(16),
                         child: Column(
                           children: const [
                             Text('IMC'),
                             Text('24.5',
                                 style: TextStyle(
-                                    fontSize: 22,
-                                    fontWeight: FontWeight.bold)),
+                                    fontSize: 22, fontWeight: FontWeight.bold)),
                             Text('Normal'),
                           ],
                         ),
@@ -160,16 +181,13 @@ class _HomeContent extends StatelessWidget {
 
               const SizedBox(height: 20),
 
-              //noticias pa rellenar :v
               const Text('Noticias de salud',
                   style: TextStyle(fontWeight: FontWeight.bold)),
               const SizedBox(height: 10),
+
               Card(
-                shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12)),
                 child: ListTile(
-                  leading: const Icon(Icons.article_outlined,
-                      color: AppColors.lightBlue),
+                  leading: Icon(Icons.article_outlined, color: AppColors.lightBlue),
                   title: const Text('5 Consejos para dormir mejor'),
                   subtitle: const Text(
                       'El descanso es clave para la salud mental y física'),

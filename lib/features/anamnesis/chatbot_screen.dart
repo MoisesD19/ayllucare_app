@@ -50,7 +50,7 @@ class _ChatbotScreenState extends State<ChatbotScreen> {
       final response = await http.post(
         Uri.parse("https://api.groq.com/openai/v1/chat/completions"),
         headers: {
-          "Authorization": "Bearer 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",
+          "Authorization": "Bearer 'TU_CLAVE_SECRETA_REAL_AQUI'",
           "Content-Type": "application/json",
         },
         body: jsonEncode({
@@ -124,7 +124,7 @@ REGLAS IMPORTANTES:
       final response = await http.post(
         Uri.parse("https://api.groq.com/openai/v1/chat/completions"),
         headers: {
-          "Authorization": "Bearer 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",
+          "Authorization": "Bearer 'TU_CLAVE_SECRETA_REAL_AQUI'",
           "Content-Type": "application/json",
         },
         body: jsonEncode({
